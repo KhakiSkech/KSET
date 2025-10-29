@@ -1,0 +1,181 @@
+version: '3.8'
+
+services:
+  # KSET Development Service
+  kset-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: kset-dev
+    restart: "no"
+    ports:
+      - "3000:3000"    # Main application
+      - "9000:9000"    # Webpack dev server
+      - "9229:9229"    # Node.js debugger
+    environment:
+      - NODE_ENV=development
+      - KSET_CONFIG_PATH=/app/config/kset.config.json
+      - KSET_LOGS_PATH=/app/logs
+      - DEBUG=kset:*
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./plugins:/app/plugins
+    depends_on:
+      - postgres-dev
+      - redis-dev
+    networks:
+      - kset-dev-network
+    command: npm run dev:server
+    stdin_open: true
+    tty: true
+
+  # PostgreSQL Development Database
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: kset-postgres-dev
+    restart: "no"
+    environment:
+      - POSTGRES_DB=kset_dev
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - kset-dev-network
+
+  # Redis Development Cache
+  redis-dev:
+    image: redis:7-alpine
+    container_name: kset-redis-dev
+    restart: "no"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6380:6379"
+    networks:
+      - kset-dev-network
+
+  # Database Admin Tool (pgAdmin)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: kset-pgadmin
+    restart: "no"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@kset.dev
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres-dev
+    networks:
+      - kset-dev-network
+
+  # Redis Commander
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: kset-redis-commander
+    restart: "no"
+    environment:
+      - REDIS_HOSTS=local:redis-dev:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis-dev
+    networks:
+      - kset-dev-network
+
+  # MailHog for Email Testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: kset-mailhog
+    restart: "no"
+    ports:
+      - "1025:1025"    # SMTP
+      - "8025:8025"    # Web UI
+    networks:
+      - kset-dev-network
+
+  # Mock API Server for Testing
+  mock-api:
+    image: mockserver/mockserver:latest
+    container_name: kset-mock-api
+    restart: "no"
+    ports:
+      - "1080:1080"
+    environment:
+      - MOCKSERVER_PROPERTY_FILE=/config/mockserver.properties
+    volumes:
+      - ./mock-api/config:/config
+      - mock_api_data:/config/mocks
+    networks:
+      - kset-dev-network
+
+  # Development Documentation Server
+  docs:
+    image: node:18-alpine
+    container_name: kset-docs
+    restart: "no"
+    working_dir: /app
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - docs_node_modules:/app/node_modules
+    command: >
+      sh -c "
+        if [ ! -d node_modules ]; then
+          npm install
+        fi
+        npm run docs && npm run docs:serve
+      "
+    networks:
+      - kset-dev-network
+
+  # Performance Monitoring (Clinic.js)
+  clinic:
+    image: node:18-alpine
+    container_name: kset-clinic
+    restart: "no"
+    working_dir: /app
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/app
+      - clinic_data:/app/.clinic
+    command: >
+      sh -c "
+        npm install -g clinic
+        clinic doctor -- node dist/index.js
+      "
+    networks:
+      - kset-dev-network
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  mock_api_data:
+    driver: local
+  docs_node_modules:
+    driver: local
+  clinic_data:
+    driver: local
+
+networks:
+  kset-dev-network:
+    driver: bridge

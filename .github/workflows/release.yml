@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run tests
+      run: npm run test:ci
+
+    - name: Build project
+      run: npm run build:prod
+
+    - name: Run security audit
+      run: npm audit --audit-level=moderate
+
+    - name: Semantic Release
+      id: semantic
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      run: npx semantic-release
+
+    - name: Upload artifacts
+      if: steps.semantic.outputs.new-release-published == 'true'
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-artifacts
+        path: |
+          dist/
+          docs/
+        retention-days: 90
+
+  publish-docs:
+    name: Publish Documentation
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.result == 'success'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build documentation
+      run: npm run docs:api
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/api
+
+  notify:
+    name: Release Notification
+    runs-on: ubuntu-latest
+    needs: [release, publish-docs]
+    if: always()
+
+    steps:
+    - name: Get release info
+      id: release-info
+      run: |
+        if [[ "${{ needs.release.result }}" == "success" ]]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "message=✅ Release completed successfully!" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "message=❌ Release failed!" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create release notification
+      run: |
+        echo "${{ steps.release-info.outputs.message }}"
+
+        if [[ "${{ steps.release-info.outputs.status }}" == "success" ]]; then
+          echo "🚀 KSET has been released to NPM!"
+          echo "📚 Documentation updated: https://kset.dev"
+          echo "📦 Install with: npm install kset"
+        fi

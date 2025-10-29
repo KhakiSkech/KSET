@@ -1,0 +1,22 @@
+[
+  {
+    "path": "dist/node/kset.cjs.js",
+    "maxSize": "200kb",
+    "compression": "gzip"
+  },
+  {
+    "path": "dist/node/kset.esm.js",
+    "maxSize": "180kb",
+    "compression": "gzip"
+  },
+  {
+    "path": "dist/browser/kset.umd.js",
+    "maxSize": "150kb",
+    "compression": "gzip"
+  },
+  {
+    "path": "dist/browser/kset.min.js",
+    "maxSize": "100kb",
+    "compression": "gzip"
+  }
+]

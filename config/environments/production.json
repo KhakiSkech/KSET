@@ -1,0 +1,181 @@
+{
+  "version": "1.0.0",
+  "environment": "production",
+  "debug": false,
+  "logging": {
+    "level": "warn",
+    "format": "json",
+    "file": "logs/kset.log",
+    "maxFileSize": "50MB",
+    "maxFiles": 10,
+    "console": false,
+    "colorize": false
+  },
+  "providers": {
+    "kiwoom": {
+      "enabled": false,
+      "demo": false,
+      "apiKey": "${KIWOOM_API_KEY}",
+      "apiSecret": "${KIWOOM_API_SECRET}",
+      "timeout": 15000,
+      "retryAttempts": 5,
+      "rateLimit": {
+        "requestsPerSecond": 20,
+        "burstSize": 40
+      },
+      "endpoints": {
+        "base": "https://api.kiwoom.com",
+        "websocket": "wss://ws.kiwoom.com"
+      }
+    },
+    "koreainvestment": {
+      "enabled": false,
+      "demo": false,
+      "apiKey": "${KOREA_INVESTMENT_API_KEY}",
+      "apiSecret": "${KOREA_INVESTMENT_API_SECRET}",
+      "timeout": 15000,
+      "retryAttempts": 5,
+      "rateLimit": {
+        "requestsPerSecond": 30,
+        "burstSize": 60
+      },
+      "endpoints": {
+        "base": "https://openapi.koreainvestment.com:9443",
+        "websocket": "wss://ops.koreainvestment.com:21000"
+      }
+    }
+  },
+  "plugins": [],
+  "security": {
+    "enableEncryption": true,
+    "secureStorage": true,
+    "auditLogging": true,
+    "apiKeyRotation": true,
+    "encryptionAlgorithm": "AES-256-GCM",
+    "keyRotationInterval": 86400000
+  },
+  "performance": {
+    "cacheEnabled": true,
+    "cacheTTL": 300,
+    "maxConcurrentRequests": 500,
+    "requestTimeout": 15000,
+    "enableMetrics": true,
+    "profiling": false
+  },
+  "database": {
+    "host": "${DB_HOST}",
+    "port": "${DB_PORT}",
+    "name": "${DB_NAME}",
+    "user": "${DB_USER}",
+    "password": "${DB_PASSWORD}",
+    "ssl": true,
+    "sslMode": "require",
+    "pool": {
+      "min": 5,
+      "max": 20,
+      "idleTimeoutMillis": 30000,
+      "connectionTimeoutMillis": 2000,
+      "evictionRunIntervalMillis": 1000
+    },
+    "migrations": {
+      "directory": "migrations",
+      "autoMigrate": false
+    }
+  },
+  "redis": {
+    "host": "${REDIS_HOST}",
+    "port": "${REDIS_PORT}",
+    "password": "${REDIS_PASSWORD}",
+    "db": 0,
+    "keyPrefix": "kset:prod:",
+    "ttl": 3600,
+    "cluster": {
+      "enabled": false,
+      "nodes": []
+    }
+  },
+  "api": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "cors": {
+      "origin": "${ALLOWED_ORIGINS}",
+      "credentials": true
+    },
+    "rateLimit": {
+      "windowMs": 900000,
+      "max": 100
+    },
+    "helmet": {
+      "contentSecurityPolicy": {
+        "directives": {
+          "defaultSrc": ["'self'"],
+          "scriptSrc": ["'self'", "'unsafe-inline'"],
+          "styleSrc": ["'self'", "'unsafe-inline'"],
+          "imgSrc": ["'self'", "data:", "https:"]
+        }
+      }
+    },
+    "compression": {
+      "level": 6,
+      "threshold": 1024
+    }
+  },
+  "websocket": {
+    "port": 9000,
+    "compression": true,
+    "maxConnections": 10000,
+    "heartbeatInterval": 30000,
+    "authentication": true,
+    "rateLimit": {
+      "windowMs": 60000,
+      "max": 100
+    }
+  },
+  "monitoring": {
+    "prometheus": {
+      "enabled": true,
+      "port": 9090,
+      "path": "/metrics"
+    },
+    "healthCheck": {
+      "enabled": true,
+      "path": "/health",
+      "interval": 30000
+    },
+    "tracing": {
+      "enabled": true,
+      "sampleRate": 0.1,
+      "serviceName": "kset"
+    }
+  },
+  "backup": {
+    "enabled": true,
+    "schedule": "0 2 * * *",
+    "retentionDays": 30,
+    "storage": {
+      "type": "s3",
+      "bucket": "${BACKUP_BUCKET}",
+      "region": "${AWS_REGION}",
+      "accessKeyId": "${AWS_ACCESS_KEY_ID}",
+      "secretAccessKey": "${AWS_SECRET_ACCESS_KEY}"
+    }
+  },
+  "features": {
+    "experimental": false,
+    "betaFeatures": [],
+    "debugMode": false,
+    "verboseLogging": false
+  },
+  "compliance": {
+    "auditTrail": true,
+    "dataRetention": {
+      "orders": 2555,
+      "trades": 2555,
+      "logs": 365
+    },
+    "regulatory": {
+      "koreaFinancial": true,
+      "fatca": true
+    }
+  }
+}

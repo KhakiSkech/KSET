@@ -1,0 +1,126 @@
+{
+  "version": "1.0.0",
+  "environment": "development",
+  "debug": true,
+  "logging": {
+    "level": "debug",
+    "format": "text",
+    "file": "logs/kset-dev.log",
+    "maxFileSize": "10MB",
+    "maxFiles": 3,
+    "console": true,
+    "colorize": true
+  },
+  "providers": {
+    "kiwoom": {
+      "enabled": false,
+      "demo": true,
+      "apiKey": "${KIWOOM_API_KEY}",
+      "apiSecret": "${KIWOOM_API_SECRET}",
+      "timeout": 30000,
+      "retryAttempts": 3,
+      "rateLimit": {
+        "requestsPerSecond": 5,
+        "burstSize": 10
+      },
+      "endpoints": {
+        "base": "https://demo-api.kiwoom.com",
+        "websocket": "wss://demo-ws.kiwoom.com"
+      }
+    },
+    "koreainvestment": {
+      "enabled": false,
+      "demo": true,
+      "apiKey": "${KOREA_INVESTMENT_API_KEY}",
+      "apiSecret": "${KOREA_INVESTMENT_API_SECRET}",
+      "timeout": 30000,
+      "retryAttempts": 3,
+      "rateLimit": {
+        "requestsPerSecond": 8,
+        "burstSize": 15
+      },
+      "endpoints": {
+        "base": "https://openapi.koreainvestment.com:9443",
+        "websocket": "wss://ops.koreainvestment.com:21000"
+      }
+    }
+  },
+  "plugins": [],
+  "security": {
+    "enableEncryption": false,
+    "secureStorage": false,
+    "auditLogging": false,
+    "apiKeyRotation": false
+  },
+  "performance": {
+    "cacheEnabled": true,
+    "cacheTTL": 60,
+    "maxConcurrentRequests": 50,
+    "requestTimeout": 30000,
+    "enableMetrics": true,
+    "profiling": true
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5433,
+    "name": "kset_dev",
+    "user": "postgres",
+    "password": "dev_password",
+    "ssl": false,
+    "pool": {
+      "min": 2,
+      "max": 10,
+      "idleTimeoutMillis": 30000,
+      "connectionTimeoutMillis": 2000
+    },
+    "migrations": {
+      "directory": "migrations",
+      "autoMigrate": true
+    }
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6380,
+    "password": "",
+    "db": 0,
+    "keyPrefix": "kset:dev:",
+    "ttl": 3600
+  },
+  "api": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "cors": {
+      "origin": ["http://localhost:3000", "http://localhost:8080"],
+      "credentials": true
+    },
+    "rateLimit": {
+      "windowMs": 900000,
+      "max": 1000
+    },
+    "helmet": {
+      "contentSecurityPolicy": false
+    }
+  },
+  "websocket": {
+    "port": 9000,
+    "compression": true,
+    "maxConnections": 1000,
+    "heartbeatInterval": 30000,
+    "authentication": false
+  },
+  "testing": {
+    "mockProviders": true,
+    "recordInteractions": true,
+    "fixtures": "tests/fixtures",
+    "coverage": {
+      "threshold": 80,
+      "exclude": ["**/test/**", "**/examples/**"]
+    }
+  },
+  "features": {
+    "experimental": true,
+    "betaFeatures": ["advanced-algorithms", "real-time-analytics"],
+    "debugMode": true,
+    "verboseLogging": true
+  }
+}

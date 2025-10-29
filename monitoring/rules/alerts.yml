@@ -1,0 +1,369 @@
+# KSET Trading Library Alert Rules
+# Optimized for Korean financial services compliance and monitoring
+
+groups:
+  # Application Health Alerts
+  - name: kset-application-health
+    rules:
+      - alert: KSETApplicationDown
+        expr: up{job="kset-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: kset-app
+          team: platform
+        annotations:
+          summary: "KSET application is down"
+          description: "KSET application has been down for more than 1 minute on {{ $labels.instance }}"
+          runbook_url: "https://docs.kset.dev/runbooks/application-down"
+
+      - alert: KSETHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: kset-app
+          team: platform
+        annotations:
+          summary: "High error rate in KSET application"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      - alert: KSETHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: kset-app
+          team: platform
+        annotations:
+          summary: "High response time in KSET application"
+          description: "95th percentile response time is {{ $value }}s on {{ $labels.instance }}"
+
+      - alert: KSETHighMemoryUsage
+        expr: (kset_memory_bytes{type="heapUsed"} / kset_memory_bytes{type="heapTotal"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: kset-app
+          team: platform
+        annotations:
+          summary: "High memory usage in KSET application"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      - alert: KSETWebSocketConnectionsHigh
+        expr: kset_websocket_connections_current > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: kset-app
+          team: platform
+        annotations:
+          summary: "High WebSocket connections"
+          description: "Current WebSocket connections: {{ $value }} on {{ $labels.instance }}"
+
+  # Database Health Alerts
+  - name: kset-database-health
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgresql
+          team: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL database has been down for more than 1 minute"
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+          team: database
+        annotations:
+          summary: "High database connections"
+          description: "Database connection usage is {{ $value | humanizePercentage }}"
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_statements_mean_time_seconds[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+          team: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query time is {{ $value }}s"
+
+      - alert: PostgreSQLReplicationLag
+        expr: pg_replication_lag_seconds > 60
+        for: 2m
+        labels:
+          severity: warning
+          service: postgresql
+          team: database
+        annotations:
+          summary: "Database replication lag"
+          description: "Replication lag is {{ $value }}s"
+
+  # Redis Cache Alerts
+  - name: kset-redis-health
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+          team: platform
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis cache has been down for more than 1 minute"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          team: platform
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: RedisHighConnections
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          team: platform
+        annotations:
+          summary: "Redis high connections"
+          description: "Redis has {{ $value }} connected clients"
+
+      - alert: RedisCacheHitRateLow
+        expr: redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: redis
+          team: platform
+        annotations:
+          summary: "Redis cache hit rate is low"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+
+  # Trading System Alerts
+  - name: kset-trading-system
+    rules:
+      - alert: TradingSystemDown
+        expr: kset_trading_system_status == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: trading
+          team: trading
+        annotations:
+          summary: "Trading system is down"
+          description: "Trading system is not operational on {{ $labels.instance }}"
+
+      - alert: OrderExecutionDelay
+        expr: kset_order_execution_duration_seconds > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: trading
+          team: trading
+        annotations:
+          summary: "Order execution delay"
+          description: "Order execution time is {{ $value }}s on {{ $labels.provider }}"
+
+      - alert: MarketDataFeedDown
+        expr: kset_market_data_feed_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: market-data
+          team: trading
+        annotations:
+          summary: "Market data feed is down"
+          description: "Market data feed from {{ $labels.provider }} is down"
+
+      - alert: HighOrderFailureRate
+        expr: rate(kset_orders_failed_total[5m]) / rate(kset_orders_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: trading
+          team: trading
+        annotations:
+          summary: "High order failure rate"
+          description: "Order failure rate is {{ $value | humanizePercentage }}"
+
+      - alert: KoreanMarketClosed
+        expr: kset_korean_market_status == 0
+        for: 0m
+        labels:
+          severity: info
+          service: market-status
+          team: trading
+        annotations:
+          summary: "Korean market is closed"
+          description: "Korean stock market is currently closed"
+
+  # Security Alerts
+  - name: kset-security
+    rules:
+      - alert: SuspiciousLoginAttempts
+        expr: rate(kset_login_failed_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: security
+          team: security
+        annotations:
+          summary: "Suspicious login attempts detected"
+          description: "{{ $value }} failed login attempts per minute"
+
+      - alert: UnauthorizedAPIAccess
+        expr: rate(kset_api_unauthorized_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+          service: security
+          team: security
+        annotations:
+          summary: "Unauthorized API access attempts"
+          description: "{{ $value }} unauthorized API requests per minute"
+
+      - alert: APIKeyRotationRequired
+        expr: time() - kset_api_key_created_timestamp > 7776000  # 90 days
+        for: 0m
+        labels:
+          severity: info
+          service: security
+          team: security
+        annotations:
+          summary: "API key rotation required"
+          description: "API key {{ $labels.key_id }} is older than 90 days"
+
+  # Business Metrics Alerts
+  - name: kset-business-metrics
+    rules:
+      - alert: LowTradingVolume
+        expr: rate(kset_trades_volume_total[1h]) < 1000000
+        for: 30m
+        labels:
+          severity: info
+          service: business
+          team: business
+        annotations:
+          summary: "Low trading volume detected"
+          description: "Trading volume is {{ $value | humanizeCurrency }} KRW per hour"
+
+      - alert: HighNumberOfActiveUsers
+        expr: kset_active_users_total > 1000
+        for: 10m
+        labels:
+          severity: info
+          service: business
+          team: business
+        annotations:
+          summary: "High number of active users"
+          description: "{{ $value }} active users currently"
+
+      - alert: KoreanStockPriceAlert
+        expr: kset_stock_price_change_percentage > 5 or kset_stock_price_change_percentage < -5
+        for: 0m
+        labels:
+          severity: info
+          service: market-data
+          team: trading
+        annotations:
+          summary: "Significant stock price movement"
+          description: "Stock {{ $labels.stock_code }} changed by {{ $value }}%"
+
+  # Infrastructure Alerts
+  - name: kset-infrastructure
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+          team: platform
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: HighDiskUsage
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+          team: platform
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsageSystem
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+          team: platform
+        annotations:
+          summary: "High system memory usage"
+          description: "Available memory is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: NetworkPacketLoss
+        expr: rate(node_network_receive_drop_total[5m]) + rate(node_network_transmit_drop_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: infrastructure
+          team: platform
+        annotations:
+          summary: "Network packet loss detected"
+          description: "Packet loss rate is {{ $value }} packets/second"
+
+  # Compliance and Regulatory Alerts
+  - name: kset-compliance
+    rules:
+      - alert: AuditLogFailure
+        expr: kset_audit_log_errors_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: compliance
+          team: compliance
+        annotations:
+          summary: "Audit log failure"
+          description: "Audit log system has recorded {{ $value }} errors"
+
+      - alert: DataRetentionViolation
+        expr: kset_data_retention_days > 2555  # 7 years for Korean compliance
+        for: 0m
+        labels:
+          severity: warning
+          service: compliance
+          team: compliance
+        annotations:
+          summary: "Data retention period violation"
+          description: "Data retained for {{ $value }} days exceeds compliance limits"
+
+      - alert: ComplianceReportFailed
+        expr: kset_compliance_report_status == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: compliance
+          team: compliance
+        annotations:
+          summary: "Compliance report generation failed"
+          description: "Failed to generate compliance report on {{ $labels.instance }}"

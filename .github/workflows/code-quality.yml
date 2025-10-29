@@ -1,0 +1,360 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  lint:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run ESLint
+      run: npm run lint
+
+    - name: Run Prettier check
+      run: npm run format:check
+
+    - name: Check for linting errors
+      run: |
+        if [[ $(npm run lint --silent 2>&1 | grep -c "error" || true) -gt 0 ]]; then
+          echo "❌ Linting errors found!"
+          exit 1
+        fi
+
+  types:
+    name: TypeScript Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run type checking
+      run: npm run typecheck
+
+    - name: Check for TypeScript errors
+      run: |
+        if ! npm run typecheck --silent; then
+          echo "❌ TypeScript errors found!"
+          exit 1
+        fi
+
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run tests with coverage
+      run: npm run test:coverage
+
+    - name: Check coverage thresholds
+      run: |
+        COVERAGE_FILE="coverage/coverage-summary.json"
+
+        if [[ -f "$COVERAGE_FILE" ]]; then
+          LINES_PCT=$(jq -r '.total.lines.pct' "$COVERAGE_FILE")
+          FUNCTIONS_PCT=$(jq -r '.total.functions.pct' "$COVERAGE_FILE")
+          BRANCHES_PCT=$(jq -r '.total.branches.pct' "$COVERAGE_FILE")
+          STATEMENTS_PCT=$(jq -r '.total.statements.pct' "$COVERAGE_FILE")
+
+          echo "Coverage Results:"
+          echo "  Lines: $LINES_PCT%"
+          echo "  Functions: $FUNCTIONS_PCT%"
+          echo "  Branches: $BRANCHES_PCT%"
+          echo "  Statements: $STATEMENTS_PCT%"
+
+          # Check if coverage meets minimum thresholds
+          if (( $(echo "$LINES_PCT < 90" | bc -l) )); then
+            echo "❌ Line coverage below 90%: $LINES_PCT%"
+            exit 1
+          fi
+
+          if (( $(echo "$FUNCTIONS_PCT < 90" | bc -l) )); then
+            echo "❌ Function coverage below 90%: $FUNCTIONS_PCT%"
+            exit 1
+          fi
+
+          if (( $(echo "$BRANCHES_PCT < 85" | bc -l) )); then
+            echo "❌ Branch coverage below 85%: $BRANCHES_PCT%"
+            exit 1
+          fi
+
+          if (( $(echo "$STATEMENTS_PCT < 90" | bc -l) )); then
+            echo "❌ Statement coverage below 90%: $STATEMENTS_PCT%"
+            exit 1
+          fi
+
+          echo "✅ All coverage thresholds met!"
+        else
+          echo "❌ Coverage file not found!"
+          exit 1
+        fi
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+
+  complexity:
+    name: Code Complexity Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install complexity tools
+      run: npm install -g complexity-report
+
+    - name: Run complexity analysis
+      run: |
+        # Analyze TypeScript files
+        find src -name "*.ts" -not -path "*/node_modules/*" -not -path "*/dist/*" | xargs complexity-report -o complexity-report.json -f json || true
+
+        # Check complexity report
+        if [[ -f "complexity-report.json" ]]; then
+          echo "Complexity Analysis Results:"
+
+          # Find files with high complexity (>10)
+          HIGH_COMPLEXITY=$(jq -r '.reports[] | select(.aggregate.complexity > 10) | "\(.file): \(.aggregate.complexity)"' complexity-report.json)
+
+          if [[ -n "$HIGH_COMPLEXITY" ]]; then
+            echo "⚠️  High complexity files found:"
+            echo "$HIGH_COMPLEXITY"
+            echo ""
+            echo "Consider refactoring these files to reduce complexity."
+          else
+            echo "✅ No files with high complexity found!"
+          fi
+
+          # Calculate average complexity
+          AVG_COMPLEXITY=$(jq -r '.reports | map(.aggregate.complexity) | add / length' complexity-report.json)
+          echo "Average complexity: $AVG_COMPLEXITY"
+
+          # Check if average complexity is acceptable (<5)
+          if (( $(echo "$AVG_COMPLEXITY > 5" | bc -l) )); then
+            echo "⚠️  Average complexity is high: $AVG_COMPLEXITY"
+          else
+            echo "✅ Average complexity is acceptable: $AVG_COMPLEXITY"
+          fi
+        else
+          echo "⚠️  Complexity analysis failed or no TypeScript files found"
+        fi
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run npm audit
+      run: npm audit --audit-level=moderate
+
+    - name: Check for known vulnerabilities
+      run: |
+        AUDIT_OUTPUT=$(npm audit --json 2>/dev/null || echo '{"vulnerabilities": {}}')
+
+        if echo "$AUDIT_OUTPUT" | jq -e '.vulnerabilities | length > 0' >/dev/null; then
+          echo "⚠️  Vulnerabilities found:"
+          echo "$AUDIT_OUTPUT" | jq -r '.vulnerabilities | to_entries[] | "\(.key): \(.value.severity) - \(.value.title)"'
+
+          # Check for critical or high severity vulnerabilities
+          CRITICAL=$(echo "$AUDIT_OUTPUT" | jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "critical" or .value.severity == "high") | .key' | wc -l)
+
+          if [[ $CRITICAL -gt 0 ]]; then
+            echo "❌ Critical or high severity vulnerabilities found: $CRITICAL"
+            exit 1
+          else
+            echo "⚠️  Moderate vulnerabilities found but no critical ones"
+          fi
+        else
+          echo "✅ No vulnerabilities found!"
+        fi
+
+  dependency-check:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Check for outdated dependencies
+      run: |
+        echo "Checking for outdated dependencies..."
+        OUTDATED=$(npm outdated --json 2>/dev/null || echo "{}")
+
+        if echo "$OUTDATED" | jq -e 'length > 0' >/dev/null 2>&1; then
+          echo "⚠️  Outdated dependencies found:"
+          echo "$OUTDATED" | jq -r 'to_entries[] | "\(.key): current=\(.value.current), latest=\(.value.latest)"'
+
+          # Check for major version updates
+          MAJOR_UPDATES=$(echo "$OUTDATED" | jq -r 'to_entries[] | select(.value.type == "major") | .key' | wc -l)
+
+          if [[ $MAJOR_UPDATES -gt 0 ]]; then
+            echo "⚠️  Major version updates available: $MAJOR_UPDATES"
+            echo "Consider updating these dependencies in a separate PR."
+          fi
+        else
+          echo "✅ All dependencies are up to date!"
+        fi
+
+    - name: Check package.json quality
+      run: |
+        echo "Validating package.json..."
+
+        # Check if all required fields are present
+        REQUIRED_FIELDS=("name" "version" "description" "main" "types" "scripts" "keywords" "author" "license")
+
+        for field in "${REQUIRED_FIELDS[@]}"; do
+          if ! jq -e ".$field" package.json >/dev/null; then
+            echo "❌ Missing required field in package.json: $field"
+            exit 1
+          fi
+        done
+
+        # Check if scripts are valid
+        REQUIRED_SCRIPTS=("test" "build" "lint")
+
+        for script in "${REQUIRED_SCRIPTS[@]}"; do
+          if ! jq -e ".scripts[\"$script\"]" package.json >/dev/null; then
+            echo "❌ Missing required script in package.json: $script"
+            exit 1
+          fi
+        done
+
+        echo "✅ package.json validation passed!"
+
+  results:
+    name: Quality Results Summary
+    runs-on: ubuntu-latest
+    needs: [lint, types, coverage, complexity, security, dependency-check]
+    if: always()
+
+    steps:
+    - name: Generate quality report
+      run: |
+        echo "# Code Quality Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        ## Lint Results
+        if [[ "${{ needs.lint.result }}" == "success" ]]; then
+          echo "✅ **Lint**: All linting checks passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Lint**: Linting issues found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        ## Type Check Results
+        if [[ "${{ needs.types.result }}" == "success" ]]; then
+          echo "✅ **Type Check**: No TypeScript errors" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Type Check**: TypeScript errors found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        ## Coverage Results
+        if [[ "${{ needs.coverage.result }}" == "success" ]]; then
+          echo "✅ **Coverage**: All coverage thresholds met" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Coverage**: Coverage thresholds not met" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        ## Security Results
+        if [[ "${{ needs.security.result }}" == "success" ]]; then
+          echo "✅ **Security**: No critical vulnerabilities" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Security**: Security issues found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        ## Complexity Results
+        if [[ "${{ needs.complexity.result }}" == "success" ]]; then
+          echo "✅ **Complexity**: Code complexity is acceptable" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ **Complexity**: High complexity areas detected" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        ## Dependency Results
+        if [[ "${{ needs.dependency-check.result }}" == "success" ]]; then
+          echo "✅ **Dependencies**: All checks passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ **Dependencies**: Issues detected" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Overall Status" >> $GITHUB_STEP_SUMMARY
+
+        if [[ "${{ needs.lint.result }}" == "success" && "${{ needs.types.result }}" == "success" && "${{ needs.coverage.result }}" == "success" && "${{ needs.security.result }}" == "success" ]]; then
+          echo "🎉 **All quality checks passed!**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Some quality checks failed. Please review the issues above.**" >> $GITHUB_STEP_SUMMARY
+        fi
